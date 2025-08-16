@@ -70,8 +70,6 @@
     </header>
 
     <div class="bar">
-      <label for="set">Набор слов</label>
-      <select id="set"></select>
       <label for="ms">Показ, мс</label>
       <input id="ms" type="number" min="300" max="4000" step="100" value="1200"/>
       <button id="shuffle">Перемешать</button>
@@ -115,46 +113,39 @@
 
   <script>
     // ===== Данные =====
-    const sets = {
-      "Неделя 1 — 2–3 буквы": ["pes","les","dom","noc","den","oko","uši","klíč","rok","sůl"],
-      "Неделя 2 — 4–5 букв": ["voda","stůl","jaro","kniha","mléko","most","květ","město","hora","chleba"],
-      "Неделя 3 — стыки и диакритика": ["stroj","prst","žába","čáp","kůň","skříň","hmyz","plot","hrách","lžice"],
-      "Неделя 4 — микс": ["pes","stůl","žába","kniha","rok","hrách","město","oko","mléko","skříň"],
-      "Своя серия": []
-    };
-    const LS_CUSTOM_KEY = 'cz_flashcards_custom_v2';
-    try {
-      const saved = localStorage.getItem(LS_CUSTOM_KEY);
-      if (saved) sets["Своя серия"] = JSON.parse(saved);
-    } catch (e) {
-      console.warn('Corrupt saved custom set — clearing', e);
-      localStorage.removeItem(LS_CUSTOM_KEY);
-    }
+      const LS_CUSTOM_KEY = 'cz_flashcards_custom_v2';
+      let words = [];
+      try {
+        const saved = localStorage.getItem(LS_CUSTOM_KEY);
+        if (saved) words = JSON.parse(saved);
+      } catch (e) {
+        console.warn('Corrupt saved custom set — clearing', e);
+        localStorage.removeItem(LS_CUSTOM_KEY);
+      }
 
-    // ===== Элементы =====
-    const ui = {
-      set: document.getElementById('set'),
-      ms: document.getElementById('ms'),
-      shuffle: document.getElementById('shuffle'),
-      reset: document.getElementById('reset'),
-      edit: document.getElementById('edit'),
-      next: document.getElementById('next'),
-      word: document.getElementById('word'),
-      screen: document.getElementById('screen'),
-      zone: document.getElementById('zone'),
-      shown: document.getElementById('shown'),
-      acc: document.getElementById('acc'),
-      streak: document.getElementById('streak'),
-      best: document.getElementById('best'),
-      hint: document.getElementById('hint'),
-      // modal
-      modal: document.getElementById('customModal'),
-      modalTextarea: document.getElementById('customTextarea'),
-      modalSave: document.getElementById('saveCustom'),
-      modalCancel: document.getElementById('cancelCustom'),
-      toast: document.getElementById('toast'),
-      dys: document.getElementById('dys')
-    };
+      // ===== Элементы =====
+      const ui = {
+        ms: document.getElementById('ms'),
+        shuffle: document.getElementById('shuffle'),
+        reset: document.getElementById('reset'),
+        edit: document.getElementById('edit'),
+        next: document.getElementById('next'),
+        word: document.getElementById('word'),
+        screen: document.getElementById('screen'),
+        zone: document.getElementById('zone'),
+        shown: document.getElementById('shown'),
+        acc: document.getElementById('acc'),
+        streak: document.getElementById('streak'),
+        best: document.getElementById('best'),
+        hint: document.getElementById('hint'),
+        // modal
+        modal: document.getElementById('customModal'),
+        modalTextarea: document.getElementById('customTextarea'),
+        modalSave: document.getElementById('saveCustom'),
+        modalCancel: document.getElementById('cancelCustom'),
+        toast: document.getElementById('toast'),
+        dys: document.getElementById('dys')
+      };
 
     // ===== Утилиты =====
     function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
@@ -172,14 +163,8 @@
     let queue = []; let current = null; let hideTimer = null; let state = 'idle';
     const stats = { shown:0, right:0, streak:0, best:0 };
 
-    function fillSetOptions(){
-      ui.set.innerHTML = '';
-      Object.keys(sets).forEach(k=>{ const opt=document.createElement('option'); opt.value=k; opt.textContent=k; ui.set.appendChild(opt); });
-      ui.set.value = Object.keys(sets)[0];
-    }
-
     function loadQueue(){
-      queue = [...sets[ui.set.value]];
+      queue = [...words];
       if (queue.length>0) shuffle(queue);
     }
 
@@ -224,7 +209,7 @@
 
     // ===== Modal helpers =====
     function openModal(){
-      ui.modalTextarea.value = (sets['Своя серия']||[]).join('\n');
+      ui.modalTextarea.value = words.join('\n');
       ui.modal.classList.add('open');
       ui.modal.setAttribute('aria-hidden','false');
       setTimeout(()=> ui.modalTextarea.focus(), 0);
@@ -239,7 +224,6 @@
     ui.next.addEventListener('click', showWord);
     ui.shuffle.addEventListener('click', ()=>shuffle(queue));
     ui.reset.addEventListener('click', ()=>{ stats.shown=stats.right=stats.streak=stats.best=0; updateStats(); });
-    ui.set.addEventListener('change', loadQueue);
 
     // Свои слова — теперь открывается встроенное модальное окно (без window.prompt)
     ui.edit.addEventListener('click', openModal);
@@ -247,9 +231,8 @@
     ui.modal.addEventListener('click', (e)=>{ if (e.target===ui.modal) closeModal(); });
     ui.modalSave.addEventListener('click', ()=>{
       const list = parseWords(ui.modalTextarea.value);
-      sets['Своя серия'] = list;
+      words = list;
       localStorage.setItem(LS_CUSTOM_KEY, JSON.stringify(list));
-      ui.set.value = 'Своя серия';
       loadQueue();
       closeModal();
       showToast(`Сохранено слов: ${list.length}`);
@@ -280,7 +263,6 @@
 
     // ===== Инициализация =====
     function init(){
-      fillSetOptions();
       loadQueue();
       updateStats();
     }
