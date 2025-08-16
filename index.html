@@ -75,7 +75,7 @@
       <button id="shuffle">Перемешать</button>
       <button id="reset">Сбросить статистику</button>
       <button id="edit">Свои слова</button>
-      <button id="next" class="primary">Пробел — удерживайте для показа</button>
+      <button id="next" class="primary">Пробел — показать слово</button>
     </div>
 
     <div class="stage">
@@ -93,7 +93,7 @@
         <div class="stat"><div class="k">Серия</div><div class="v" id="streak">0</div></div>
         <div class="stat"><div class="k">Лучшая серия</div><div class="v" id="best">0</div></div>
       </div>
-        <div class="hint" id="hint">Зажмите пробел, чтобы увидеть слово. ← ошибка, → верно. После оценки нажмите пробел для следующего.</div>
+        <div class="hint" id="hint">Пробел — показать слово. ← ошибка, → верно. Следующее слово появляется автоматически после оценки.</div>
     </div>
   </div>
 
@@ -161,7 +161,6 @@
 
     // ===== Логика очереди =====
     let queue = []; let current = null; let hideTimer = null; let state = 'idle';
-    let spaceDown = false;
     const stats = { shown:0, right:0, streak:0, best:0 };
 
     function loadQueue(){
@@ -174,21 +173,22 @@
       if (state==='await-grade'){
         ui.word.textContent = current;
         ui.zone.hidden = true;
-        state='showing';
-        return;
-      }
-      if (state!=='idle' && state!=='graded') return;
-      if (queue.length===0){
-        loadQueue();
+      } else {
+        if (state!=='idle' && state!=='graded') return;
         if (queue.length===0){
-          ui.word.textContent='(добавьте слова)';
-          return;
+          loadQueue();
+          if (queue.length===0){
+            ui.word.textContent='(добавьте слова)';
+            return;
+          }
         }
+        current = queue.shift();
+        ui.word.textContent = current;
+        ui.zone.hidden = true; // во время показа оценка отключена
       }
-      current = queue.shift();
-      ui.word.textContent = current;
-      ui.zone.hidden = true; // во время показа оценка отключена
       state='showing';
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideWord, Number(ui.ms.value));
     }
 
     function hideWord(){
@@ -212,6 +212,7 @@
       }
       updateStats();
       current=null; state='graded'; ui.zone.hidden=true;
+      showWord();
     }
 
     function updateStats(){
@@ -234,11 +235,7 @@
     function showToast(msg){ ui.toast.textContent = msg; ui.toast.classList.add('show'); setTimeout(()=> ui.toast.classList.remove('show'), 1200); }
 
     // ===== События =====
-    ui.next.addEventListener('click', ()=>{
-      showWord();
-      clearTimeout(hideTimer);
-      hideTimer = setTimeout(hideWord, Number(ui.ms.value));
-    });
+    ui.next.addEventListener('click', showWord);
     ui.shuffle.addEventListener('click', ()=>shuffle(queue));
     ui.reset.addEventListener('click', ()=>{ stats.shown=stats.right=stats.streak=stats.best=0; updateStats(); });
 
@@ -265,20 +262,9 @@
         if ((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); ui.modalSave.click(); }
         return;
       }
-      if ((e.code==='Space' || e.key===' ' || e.key==='Spacebar') && !spaceDown){
-        spaceDown = true;
-        e.preventDefault();
-        showWord();
-      }
+      if (e.code==='Space'){ e.preventDefault(); showWord(); }
       if (e.key==='ArrowLeft') grade('bad');
       if (e.key==='ArrowRight') grade('good');
-    });
-
-    window.addEventListener('keyup',(e)=>{
-      if (e.code==='Space' || e.key===' ' || e.key==='Spacebar'){
-        spaceDown = false;
-        hideWord();
-      }
     });
 
     // Дислексия режим
