@@ -75,7 +75,7 @@
       <button id="shuffle">Перемешать</button>
       <button id="reset">Сбросить статистику</button>
       <button id="edit">Свои слова</button>
-      <button id="next" class="primary">Пробел — Показать слово</button>
+      <button id="next" class="primary">Пробел — удерживайте для показа</button>
     </div>
 
     <div class="stage">
@@ -93,7 +93,7 @@
         <div class="stat"><div class="k">Серия</div><div class="v" id="streak">0</div></div>
         <div class="stat"><div class="k">Лучшая серия</div><div class="v" id="best">0</div></div>
       </div>
-      <div class="hint" id="hint">Пробел — показать слово. ← ошибка, → верно. После оценки следующее слово появится автоматически.</div>
+        <div class="hint" id="hint">Зажмите пробел, чтобы увидеть слово. ← ошибка, → верно. После оценки нажмите пробел для следующего.</div>
     </div>
   </div>
 
@@ -161,6 +161,7 @@
 
     // ===== Логика очереди =====
     let queue = []; let current = null; let hideTimer = null; let state = 'idle';
+    let spaceDown = false;
     const stats = { shown:0, right:0, streak:0, best:0 };
 
     function loadQueue(){
@@ -169,6 +170,13 @@
     }
 
     function showWord(){
+      if (state==='showing') return;
+      if (state==='await-grade'){
+        ui.word.textContent = current;
+        ui.zone.hidden = true;
+        state='showing';
+        return;
+      }
       if (state!=='idle' && state!=='graded') return;
       if (queue.length===0){
         loadQueue();
@@ -180,9 +188,15 @@
       current = queue.shift();
       ui.word.textContent = current;
       ui.zone.hidden = true; // во время показа оценка отключена
-      clearTimeout(hideTimer);
-      hideTimer = setTimeout(()=>{ ui.word.textContent='—'; state='await-grade'; ui.zone.hidden=false; }, Number(ui.ms.value));
       state='showing';
+    }
+
+    function hideWord(){
+      if (state!=='showing') return;
+      clearTimeout(hideTimer);
+      ui.word.textContent='—';
+      state='await-grade';
+      ui.zone.hidden=false;
     }
 
     function grade(type){
@@ -197,8 +211,7 @@
         const delay = 3 + Math.floor(Math.random()*3); queue.splice(Math.min(delay, queue.length), 0, current);
       }
       updateStats();
-      current=null; state='graded'; ui.zone.hidden=true; // мгновенно показываем следующее
-      showWord();
+      current=null; state='graded'; ui.zone.hidden=true;
     }
 
     function updateStats(){
@@ -221,7 +234,11 @@
     function showToast(msg){ ui.toast.textContent = msg; ui.toast.classList.add('show'); setTimeout(()=> ui.toast.classList.remove('show'), 1200); }
 
     // ===== События =====
-    ui.next.addEventListener('click', showWord);
+    ui.next.addEventListener('click', ()=>{
+      showWord();
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideWord, Number(ui.ms.value));
+    });
     ui.shuffle.addEventListener('click', ()=>shuffle(queue));
     ui.reset.addEventListener('click', ()=>{ stats.shown=stats.right=stats.streak=stats.best=0; updateStats(); });
 
@@ -236,26 +253,32 @@
       loadQueue();
       closeModal();
       showToast(`Сохранено слов: ${list.length}`);
-      if (state==='idle' || state==='graded') showWord();
     });
 
     // Оценка кликом/тапом по зонам
     ui.zone.addEventListener('click', (e)=>{ const t=e.target; if (t.dataset.grade==='good') grade('good'); if (t.dataset.grade==='bad') grade('bad'); });
 
-    // Клавиатура: Space показать; ← ошибка; → верно; Esc — закрыть модалку; Ctrl+Enter — сохранить
+    // Клавиатура: Space удерживать; ← ошибка; → верно; Esc — закрыть модалку; Ctrl+Enter — сохранить
     window.addEventListener('keydown',(e)=>{
       if (ui.modal.classList.contains('open')){
         if (e.key==='Escape'){ closeModal(); }
         if ((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); ui.modalSave.click(); }
         return;
       }
-      if (e.code==='Space' || e.key===' ' || e.key==='Spacebar'){
+      if ((e.code==='Space' || e.key===' ' || e.key==='Spacebar') && !spaceDown){
+        spaceDown = true;
         e.preventDefault();
-        if (state==='await-grade'){ return; }
         showWord();
       }
       if (e.key==='ArrowLeft') grade('bad');
       if (e.key==='ArrowRight') grade('good');
+    });
+
+    window.addEventListener('keyup',(e)=>{
+      if (e.code==='Space' || e.key===' ' || e.key==='Spacebar'){
+        spaceDown = false;
+        hideWord();
+      }
     });
 
     // Дислексия режим
