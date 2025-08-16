@@ -68,11 +68,6 @@
     <header>
       <h1>Чешские флешкарты — тренажёр чтения</h1>
       <div class="bar" style="gap:6px">
-        <label for="lang">Язык UI</label>
-        <select id="lang">
-          <option value="ru">Русский</option>
-          <option value="en">English</option>
-        </select>
         <button id="dys">Дислексия</button>
       </div>
     </header>
@@ -98,10 +93,10 @@
         </div>
       </div>
       <div class="stats">
-        <div class="stat"><div class="k" data-i18n="shown">Показано</div><div class="v" id="shown">0</div></div>
-        <div class="stat"><div class="k" data-i18n="acc">Точность</div><div class="v" id="acc">0%</div></div>
-        <div class="stat"><div class="k" data-i18n="streak">Серия</div><div class="v" id="streak">0</div></div>
-        <div class="stat"><div class="k" data-i18n="best">Лучшая серия</div><div class="v" id="best">0</div></div>
+        <div class="stat"><div class="k">Показано</div><div class="v" id="shown">0</div></div>
+        <div class="stat"><div class="k">Точность</div><div class="v" id="acc">0%</div></div>
+        <div class="stat"><div class="k">Серия</div><div class="v" id="streak">0</div></div>
+        <div class="stat"><div class="k">Лучшая серия</div><div class="v" id="best">0</div></div>
       </div>
       <div class="hint" id="hint">Пробел — показать слово. ← ошибка, → верно. После оценки следующее слово появится автоматически.</div>
     </div>
@@ -141,7 +136,6 @@
 
     // ===== Элементы =====
     const ui = {
-      lang: document.getElementById('lang'),
       set: document.getElementById('set'),
       ms: document.getElementById('ms'),
       shuffle: document.getElementById('shuffle'),
@@ -164,39 +158,6 @@
       toast: document.getElementById('toast'),
       dys: document.getElementById('dys')
     };
-
-    // ===== Локализация (RU/EN) =====
-    const i18n = {
-      ru: {
-        title: 'Чешские флешкарты — тренажёр чтения',
-        shown: 'Показано', acc: 'Точность', streak: 'Серия', best: 'Лучшая серия',
-        nextBtn: 'Пробел — Показать слово',
-        hint: 'Пробел — показать слово. ← ошибка, → верно. После оценки следующее слово появится автоматически.',
-        customTitle: 'Свои слова',
-        customNote: 'Разделяйте запятой, точкой с запятой или с новой строки.',
-        dysBtn: 'Дислексия'
-      },
-      en: {
-        title: 'Czech Flashcards — Reading Trainer',
-        shown: 'Shown', acc: 'Accuracy', streak: 'Streak', best: 'Best streak',
-        nextBtn: 'Space — Show word',
-        hint: 'Space to show. ← wrong, → correct. Next word appears after grading.',
-        customTitle: 'Custom words',
-        customNote: 'Separate with comma, semicolon, or newline.',
-        dysBtn: 'Dyslexia mode'
-      }
-    };
-    function setLang(l){
-      document.title = i18n[l].title;
-      document.querySelector('h1').textContent = i18n[l].title;
-      ui.next.textContent = i18n[l].nextBtn;
-      ui.hint.textContent = i18n[l].hint;
-      document.querySelectorAll('[data-i18n="shown"]').forEach(n=>n.textContent=i18n[l].shown);
-      document.querySelectorAll('[data-i18n="acc"]').forEach(n=>n.textContent=i18n[l].acc);
-      document.querySelectorAll('[data-i18n="streak"]').forEach(n=>n.textContent=i18n[l].streak);
-      document.querySelectorAll('[data-i18n="best"]').forEach(n=>n.textContent=i18n[l].best);
-      ui.dys.textContent = i18n[l].dysBtn;
-    }
 
     // ===== Утилиты =====
     function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
@@ -321,8 +282,6 @@
       fillSetOptions();
       loadQueue();
       updateStats();
-      setLang('ru');
-      ui.lang.addEventListener('change', ()=> setLang(ui.lang.value));
     }
     init();
   </script>
