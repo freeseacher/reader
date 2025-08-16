@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Чешские флешкарты — тренажёр чтения</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/open-dyslexic@0.0.4/open-dyslexic.css">
+  <style>
+    :root{
+      --bg:#0b1220; --fg:#e6e7eb; --muted:#9aa4b2; --border:rgba(255,255,255,.12);
+      --good:#22c55e; --bad:#ef4444; --accent:#38bdf8; --overlay:rgba(0,0,0,.6);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", Arial; background:#0b1220; color:var(--fg)}
+    body.dyslexia{font-family:'OpenDyslexic', Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", Arial; letter-spacing:.05em; line-height:1.5; background:#f5f5f5; color:#000}
+    .app{max-width:900px; margin:0 auto; padding:20px}
+    header{display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:10px}
+    h1{font-size:clamp(18px,2.4vw,28px); margin:0}
+
+    .bar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,.04);
+      border:1px solid var(--border); border-radius:14px; padding:10px 12px}
+    label{font-size:13px; color:var(--muted)}
+    select,input,button{background:#0c1426; color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px}
+    body.dyslexia select,body.dyslexia input,body.dyslexia button{background:#fff; color:#000; border:1px solid #ccc}
+    button{cursor:pointer}
+    .primary{background:linear-gradient(135deg, rgba(56,189,248,.18), rgba(167,139,250,.14)); border-color:rgba(56,189,248,.5)}
+
+    .stage{margin-top:14px; display:grid; gap:12px}
+    .screen{position:relative; height:min(44vh,320px); display:flex; align-items:center; justify-content:center; border-radius:22px;
+      background:rgba(255,255,255,.04); border:1px dashed var(--border); user-select:none}
+    .word{font-size: clamp(48px,10vw,132px); font-weight:800; letter-spacing:.5px}
+    .screen.flash-good{outline:3px solid var(--good)}
+    .screen.flash-bad{outline:3px solid var(--bad)}
+
+    /* Две большие зоны для мгновенной оценки */
+    .zone{position:absolute; inset:0; display:grid; grid-template-columns:1fr 1fr;}
+    .left, .right{cursor:pointer}
+    .left:hover{outline:3px dashed rgba(239,68,68,.4)}
+    .right:hover{outline:3px dashed rgba(34,197,94,.4)}
+
+    .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+    .stat{background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:12px; padding:10px}
+    .k{color:var(--muted); font-size:12px}
+    .v{font-size:18px; font-weight:700}
+
+    .hint{color:var(--muted); text-align:center}
+    .tests{font-size:12px; color:var(--muted)}
+    @media (max-width:640px){ .stats{grid-template-columns:repeat(2,1fr)} }
+
+    /* ===== Inline editor (modal) ===== */
+    .modal{position:fixed; inset:0; display:none; place-items:center; background:var(--overlay); z-index:50}
+    .modal.open{display:grid}
+    .modal-card{width:min(720px, 96vw); background:#0c1426; border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 10px 40px rgba(0,0,0,.5)}
+    .modal-card h2{margin:6px 0 8px; font-size:18px}
+    .modal-card textarea{width:100%; min-height:160px; background:#0a1222; color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:10px}
+    body.dyslexia .modal-card{background:#fff; color:#000; border:1px solid #ccc}
+    body.dyslexia .modal-card textarea{background:#fff; color:#000; border:1px solid #ccc}
+    .modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
+    .note{font-size:12px; color:var(--muted)}
+
+    /* toast */
+    .toast{position:fixed; right:16px; bottom:16px; background:#0c1426; border:1px solid var(--border); padding:10px 12px; border-radius:10px; display:none}
+    .toast.show{display:block}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Чешские флешкарты — тренажёр чтения</h1>
+      <div class="bar" style="gap:6px">
+        <label for="lang">Язык UI</label>
+        <select id="lang">
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+        <button id="dys">Дислексия</button>
+      </div>
+    </header>
+
+    <div class="bar">
+      <label for="set">Набор слов</label>
+      <select id="set"></select>
+      <label for="ms">Показ, мс</label>
+      <input id="ms" type="number" min="300" max="4000" step="100" value="1200"/>
+      <button id="shuffle">Перемешать</button>
+      <button id="reset">Сбросить статистику</button>
+      <button id="edit">Свои слова</button>
+      <button id="next" class="primary">Пробел — Показать слово</button>
+    </div>
+
+    <div class="stage">
+      <div class="screen" id="screen" aria-live="polite">
+        <div class="word" id="word">—</div>
+        <!-- невидимая сетка для мгновенной оценки: влево — Ошибка, вправо — Верно -->
+        <div class="zone" id="zone" hidden>
+          <div class="left" data-grade="bad" title="Ошибка (←)"></div>
+          <div class="right" data-grade="good" title="Верно (→)"></div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k" data-i18n="shown">Показано</div><div class="v" id="shown">0</div></div>
+        <div class="stat"><div class="k" data-i18n="acc">Точность</div><div class="v" id="acc">0%</div></div>
+        <div class="stat"><div class="k" data-i18n="streak">Серия</div><div class="v" id="streak">0</div></div>
+        <div class="stat"><div class="k" data-i18n="best">Лучшая серия</div><div class="v" id="best">0</div></div>
+      </div>
+      <div class="hint" id="hint">Пробел — показать слово. ← ошибка, → верно. После оценки следующее слово появится автоматически.</div>
+      <div class="tests" id="testStatus">Self‑tests: running…</div>
+    </div>
+  </div>
+
+  <!-- Modal for custom words -->
+  <div id="customModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customTitle">
+      <h2 id="customTitle">Свои слова</h2>
+      <div class="note">Разделяйте <strong>запятой</strong>, <strong>точкой с запятой</strong> или <strong>с новой строки</strong>. Пример: <code>pes, les; dom\nokno</code></div>
+      <textarea id="customTextarea" placeholder="žába, kůň, město\nmléko"></textarea>
+      <div class="modal-actions">
+        <button id="cancelCustom">Отмена</button>
+        <button id="saveCustom" class="primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast" class="toast">Сохранено</div>
+
+  <script>
+    // ===== Данные =====
+    const sets = {
+      "Неделя 1 — 2–3 буквы": ["pes","les","dom","noc","den","oko","uši","klíč","rok","sůl"],
+      "Неделя 2 — 4–5 букв": ["voda","stůl","jaro","kniha","mléko","most","květ","město","hora","chleba"],
+      "Неделя 3 — стыки и диакритика": ["stroj","prst","žába","čáp","kůň","skříň","hmyz","plot","hrách","lžice"],
+      "Неделя 4 — микс": ["pes","stůl","žába","kniha","rok","hrách","město","oko","mléko","skříň"],
+      "Своя серия": []
+    };
+    const LS_CUSTOM_KEY = 'cz_flashcards_custom_v2';
+    try {
+      const saved = localStorage.getItem(LS_CUSTOM_KEY);
+      if (saved) sets["Своя серия"] = JSON.parse(saved);
+    } catch (e) {
+      console.warn('Corrupt saved custom set — clearing', e);
+      localStorage.removeItem(LS_CUSTOM_KEY);
+    }
+
+    // ===== Элементы =====
+    const ui = {
+      lang: document.getElementById('lang'),
+      set: document.getElementById('set'),
+      ms: document.getElementById('ms'),
+      shuffle: document.getElementById('shuffle'),
+      reset: document.getElementById('reset'),
+      edit: document.getElementById('edit'),
+      next: document.getElementById('next'),
+      word: document.getElementById('word'),
+      screen: document.getElementById('screen'),
+      zone: document.getElementById('zone'),
+      shown: document.getElementById('shown'),
+      acc: document.getElementById('acc'),
+      streak: document.getElementById('streak'),
+      best: document.getElementById('best'),
+      hint: document.getElementById('hint'),
+      testStatus: document.getElementById('testStatus'),
+      // modal
+      modal: document.getElementById('customModal'),
+      modalTextarea: document.getElementById('customTextarea'),
+      modalSave: document.getElementById('saveCustom'),
+      modalCancel: document.getElementById('cancelCustom'),
+      toast: document.getElementById('toast'),
+      dys: document.getElementById('dys')
+    };
+
+    // ===== Локализация (RU/EN) =====
+    const i18n = {
+      ru: {
+        title: 'Чешские флешкарты — тренажёр чтения',
+        shown: 'Показано', acc: 'Точность', streak: 'Серия', best: 'Лучшая серия',
+        nextBtn: 'Пробел — Показать слово',
+        hint: 'Пробел — показать слово. ← ошибка, → верно. После оценки следующее слово появится автоматически.',
+        customTitle: 'Свои слова',
+        customNote: 'Разделяйте запятой, точкой с запятой или с новой строки.',
+        dysBtn: 'Дислексия'
+      },
+      en: {
+        title: 'Czech Flashcards — Reading Trainer',
+        shown: 'Shown', acc: 'Accuracy', streak: 'Streak', best: 'Best streak',
+        nextBtn: 'Space — Show word',
+        hint: 'Space to show. ← wrong, → correct. Next word appears after grading.',
+        customTitle: 'Custom words',
+        customNote: 'Separate with comma, semicolon, or newline.',
+        dysBtn: 'Dyslexia mode'
+      }
+    };
+    function setLang(l){
+      document.title = i18n[l].title;
+      document.querySelector('h1').textContent = i18n[l].title;
+      ui.next.textContent = i18n[l].nextBtn;
+      ui.hint.textContent = i18n[l].hint;
+      document.querySelectorAll('[data-i18n="shown"]').forEach(n=>n.textContent=i18n[l].shown);
+      document.querySelectorAll('[data-i18n="acc"]').forEach(n=>n.textContent=i18n[l].acc);
+      document.querySelectorAll('[data-i18n="streak"]').forEach(n=>n.textContent=i18n[l].streak);
+      document.querySelectorAll('[data-i18n="best"]').forEach(n=>n.textContent=i18n[l].best);
+      ui.dys.textContent = i18n[l].dysBtn;
+    }
+
+    // ===== Утилиты =====
+    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+
+    // Центральный парсер пользовательского ввода слов — безопасный RegExp
+    function parseWords(raw){
+      if (!raw) return [];
+      return raw
+        .split(/[;,
+]+/)
+        .map(s=>s.trim())
+        .filter(Boolean);
+    }
+
+    // ===== Логика очереди =====
+    let queue = []; let current = null; let hideTimer = null; let state = 'idle';
+    const stats = { shown:0, right:0, streak:0, best:0 };
+
+    function fillSetOptions(){
+      ui.set.innerHTML = '';
+      Object.keys(sets).forEach(k=>{ const opt=document.createElement('option'); opt.value=k; opt.textContent=k; ui.set.appendChild(opt); });
+      ui.set.value = Object.keys(sets)[0];
+    }
+
+    function loadQueue(){
+      queue = [...sets[ui.set.value]];
+      if (queue.length>0) shuffle(queue);
+    }
+
+    function showWord(){
+      if (state!=='idle' && state!=='graded') return;
+      if (queue.length===0){
+        loadQueue();
+        if (queue.length===0){
+          ui.word.textContent='(добавьте слова)';
+          return;
+        }
+      }
+      current = queue.shift();
+      ui.word.textContent = current;
+      ui.zone.hidden = true; // во время показа оценка отключена
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(()=>{ ui.word.textContent='—'; state='await-grade'; ui.zone.hidden=false; }, Number(ui.ms.value));
+      state='showing';
+    }
+
+    function grade(type){
+      if (state!=='await-grade' || !current) return;
+      ui.screen.classList.add(type==='good'?'flash-good':'flash-bad');
+      setTimeout(()=>ui.screen.classList.remove('flash-good','flash-bad'),150);
+      stats.shown++;
+      if (type==='good'){
+        stats.right++; stats.streak++; stats.best=Math.max(stats.best, stats.streak);
+      } else {
+        stats.streak=0; // вернуть слово позже
+        const delay = 3 + Math.floor(Math.random()*3); queue.splice(Math.min(delay, queue.length), 0, current);
+      }
+      updateStats();
+      current=null; state='graded'; ui.zone.hidden=true; // мгновенно показываем следующее
+      showWord();
+    }
+
+    function updateStats(){
+      ui.shown.textContent = stats.shown;
+      ui.acc.textContent = stats.shown? Math.round(100*stats.right/stats.shown)+'%' : '0%';
+      ui.streak.textContent = stats.streak; ui.best.textContent = stats.best;
+    }
+
+    // ===== Modal helpers =====
+    function openModal(){
+      ui.modalTextarea.value = (sets['Своя серия']||[]).join('\n');
+      ui.modal.classList.add('open');
+      ui.modal.setAttribute('aria-hidden','false');
+      setTimeout(()=> ui.modalTextarea.focus(), 0);
+    }
+    function closeModal(){
+      ui.modal.classList.remove('open');
+      ui.modal.setAttribute('aria-hidden','true');
+    }
+    function showToast(msg){ ui.toast.textContent = msg; ui.toast.classList.add('show'); setTimeout(()=> ui.toast.classList.remove('show'), 1200); }
+
+    // ===== События =====
+    ui.next.addEventListener('click', showWord);
+    ui.shuffle.addEventListener('click', ()=>shuffle(queue));
+    ui.reset.addEventListener('click', ()=>{ stats.shown=stats.right=stats.streak=stats.best=0; updateStats(); });
+    ui.set.addEventListener('change', loadQueue);
+
+    // Свои слова — теперь открывается встроенное модальное окно (без window.prompt)
+    ui.edit.addEventListener('click', openModal);
+    ui.modalCancel.addEventListener('click', closeModal);
+    ui.modal.addEventListener('click', (e)=>{ if (e.target===ui.modal) closeModal(); });
+    ui.modalSave.addEventListener('click', ()=>{
+      const list = parseWords(ui.modalTextarea.value);
+      sets['Своя серия'] = list;
+      localStorage.setItem(LS_CUSTOM_KEY, JSON.stringify(list));
+      ui.set.value = 'Своя серия';
+      loadQueue();
+      closeModal();
+      showToast(`Сохранено слов: ${list.length}`);
+      if (state==='idle' || state==='graded') showWord();
+    });
+
+    // Оценка кликом/тапом по зонам
+    ui.zone.addEventListener('click', (e)=>{ const t=e.target; if (t.dataset.grade==='good') grade('good'); if (t.dataset.grade==='bad') grade('bad'); });
+
+    // Клавиатура: Space показать; ← ошибка; → верно; Esc — закрыть модалку; Ctrl+Enter — сохранить
+    window.addEventListener('keydown',(e)=>{
+      if (ui.modal.classList.contains('open')){
+        if (e.key==='Escape'){ closeModal(); }
+        if ((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); ui.modalSave.click(); }
+        return;
+      }
+      if (e.code==='Space'){ e.preventDefault(); if(state==='await-grade'){ return; } showWord(); }
+      if (e.key==='ArrowLeft') grade('bad');
+      if (e.key==='ArrowRight') grade('good');
+    });
+
+    // Дислексия режим
+    ui.dys.addEventListener('click', ()=>{ document.body.classList.toggle('dyslexia'); });
+
+    // ===== Self‑tests =====
+    function assertEqual(name, got, expected){
+      const ok = JSON.stringify(got) === JSON.stringify(expected);
+      console[ok? 'log' : 'error'](`[test] ${name}:`, ok ? 'OK' : `FAIL\n  got: ${JSON.stringify(got)}\n  expected: ${JSON.stringify(expected)}`);
+      return ok;
+    }
+    function runTests(){
+      let ok = true;
+      ok = ok && assertEqual('split commas', parseWords('pes, les,dom'), ['pes','les','dom']);
+      ok = ok && assertEqual('split semicolons', parseWords('pes;les; dom'), ['pes','les','dom']);
+      ok = ok && assertEqual('split newlines', parseWords('pes\nles\ndom'), ['pes','les','dom']);
+      ok = ok && assertEqual('mixed delimiters', parseWords(' pes,les;dom\n oko '), ['pes','les','dom','oko']);
+      ok = ok && assertEqual('diacritics preserved', parseWords('žába, kůň'), ['žába','kůň']);
+      ok = ok && assertEqual('consecutive delimiters collapsed', parseWords('pes,,;\n;les'), ['pes','les']);
+      ok = ok && assertEqual('empty -> []', parseWords('   '), []);
+      ui.testStatus.textContent = ok ? 'Self‑tests: passed' : 'Self‑tests: FAILED — см. консоль';
+    }
+
+    // ===== Инициализация =====
+    function init(){
+      fillSetOptions();
+      loadQueue();
+      updateStats();
+      setLang('ru');
+      runTests();
+      ui.lang.addEventListener('change', ()=> setLang(ui.lang.value));
+    }
+    init();
+  </script>
+</body>
+</html>
