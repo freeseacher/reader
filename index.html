@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Чешские флешкарты — тренажёр чтения</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/open-dyslexic@0.0.4/open-dyslexic.css">
+  <style>
+    :root{
+      --bg:#0b1220; --fg:#e6e7eb; --muted:#9aa4b2; --border:rgba(255,255,255,.12);
+      --good:#22c55e; --bad:#ef4444; --accent:#38bdf8; --overlay:rgba(0,0,0,.6);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", Arial; background:#0b1220; color:var(--fg)}
+    .app{max-width:900px; margin:0 auto; padding:20px}
+    header{display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:10px}
+    h1{font-size:clamp(18px,2.4vw,28px); margin:0}
+
+    .bar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,.04);
+      border:1px solid var(--border); border-radius:14px; padding:10px 12px}
+    label{font-size:13px; color:var(--muted)}
+    select,input,button{background:#0c1426; color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-size:14px}
+    button{cursor:pointer}
+    .primary{background:linear-gradient(135deg, rgba(56,189,248,.18), rgba(167,139,250,.14)); border-color:rgba(56,189,248,.5)}
+
+    .stage{margin-top:14px; display:grid; gap:12px}
+    .screen{position:relative; height:min(44vh,320px); display:flex; align-items:center; justify-content:center; border-radius:22px;
+      background:rgba(255,255,255,.04); border:1px dashed var(--border); user-select:none}
+    .word{font-size: clamp(48px,10vw,132px); font-weight:800; letter-spacing:.5px}
+    .screen.flash-good{outline:3px solid var(--good)}
+    .screen.flash-bad{outline:3px solid var(--bad)}
+
+    /* Две большие зоны для мгновенной оценки */
+    .zone{position:absolute; inset:0; display:grid; grid-template-columns:1fr 1fr;}
+    .left, .right{cursor:pointer}
+    .left:hover{outline:3px dashed rgba(239,68,68,.4)}
+    .right:hover{outline:3px dashed rgba(34,197,94,.4)}
+
+    .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+    .stat{background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:12px; padding:10px}
+    .k{color:var(--muted); font-size:12px}
+    .v{font-size:18px; font-weight:700}
+
+    .hint{color:var(--muted); text-align:center}
+    @media (max-width:640px){ .stats{grid-template-columns:repeat(2,1fr)} }
+
+    /* ===== Inline editor (modal) ===== */
+    .modal{position:fixed; inset:0; display:none; place-items:center; background:var(--overlay); z-index:50}
+    .modal.open{display:grid}
+    .modal-card{width:min(720px, 96vw); background:#0c1426; border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 10px 40px rgba(0,0,0,.5)}
+    .modal-card h2{margin:6px 0 8px; font-size:18px}
+    .modal-card textarea{width:100%; min-height:160px; background:#0a1222; color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:10px}
+    .modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:10px}
+    .note{font-size:12px; color:var(--muted)}
+
+    /* toast */
+    .toast{position:fixed; right:16px; bottom:16px; background:#0c1426; border:1px solid var(--border); padding:10px 12px; border-radius:10px; display:none}
+    .toast.show{display:block}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Чешские флешкарты — тренажёр чтения</h1>
+      <div class="bar" style="gap:6px">
+        <label for="font">Шрифт</label>
+        <select id="font">
+          <option value="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', Arial">Inter</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+          <option value="Georgia, serif">Georgia</option>
+          <option value="Verdana, sans-serif">Verdana</option>
+          <option value="Tahoma, sans-serif">Tahoma</option>
+          <option value="'Comic Sans MS', cursive">Comic Sans</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="'Fira Mono', monospace">Fira Mono</option>
+          <option value="'OpenDyslexic', sans-serif">OpenDyslexic</option>
+        </select>
+        <label for="fontStyle">Начертание</label>
+        <select id="fontStyle">
+          <option value="normal">Обычное</option>
+          <option value="italic">Курсив</option>
+        </select>
+        <button id="showStats">Статистика</button>
+      </div>
+    </header>
+
+    <div class="bar">
+      <label for="ms">Показ, мс</label>
+      <input id="ms" type="number" min="300" max="4000" step="100" value="1200"/>
+      <button id="shuffle">Перемешать</button>
+      <button id="reset">Сбросить статистику</button>
+      <button id="edit">Свои слова</button>
+      <button id="next" class="primary">Пробел — показать слово</button>
+    </div>
+
+    <div class="stage">
+      <div class="screen" id="screen" aria-live="polite">
+        <div class="word" id="word">—</div>
+        <!-- невидимая сетка для мгновенной оценки: влево — Ошибка, вправо — Верно -->
+        <div class="zone" id="zone" hidden>
+          <div class="left" data-grade="bad" title="Ошибка (←)"></div>
+          <div class="right" data-grade="good" title="Верно (→)"></div>
+        </div>
+      </div>
+      <div class="hint" id="hint">Пробел — показать слово. ← ошибка, → верно. Следующее слово появляется автоматически после оценки.</div>
+    </div>
+  </div>
+
+  <!-- Stats modal -->
+  <div id="statsModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+      <h2 id="statsTitle">Статистика</h2>
+      <div class="stats">
+        <div class="stat"><div class="k">Показано</div><div class="v" id="shown">0</div></div>
+        <div class="stat"><div class="k">Точность</div><div class="v" id="acc">0%</div></div>
+        <div class="stat"><div class="k">Серия</div><div class="v" id="streak">0</div></div>
+        <div class="stat"><div class="k">Лучшая серия</div><div class="v" id="best">0</div></div>
+      </div>
+      <div class="modal-actions">
+        <button id="closeStats" class="primary">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for custom words -->
+  <div id="customModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customTitle">
+      <h2 id="customTitle">Свои слова</h2>
+      <div class="note">Разделяйте <strong>запятой</strong>, <strong>точкой с запятой</strong> или <strong>с новой строки</strong>. Пример: <code>pes, les; dom\nokno</code></div>
+      <textarea id="customTextarea" placeholder="žába, kůň, město\nmléko"></textarea>
+      <div class="modal-actions">
+        <button id="cancelCustom">Отмена</button>
+        <button id="saveCustom" class="primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast" class="toast">Сохранено</div>
+
+  <script>
+    // ===== Данные =====
+      const LS_CUSTOM_KEY = 'cz_flashcards_custom_v2';
+      let words = [];
+      try {
+        const saved = localStorage.getItem(LS_CUSTOM_KEY);
+        if (saved) words = JSON.parse(saved);
+      } catch (e) {
+        console.warn('Corrupt saved custom set — clearing', e);
+        localStorage.removeItem(LS_CUSTOM_KEY);
+      }
+
+      // ===== Элементы =====
+      const ui = {
+        font: document.getElementById('font'),
+        fontStyle: document.getElementById('fontStyle'),
+        showStats: document.getElementById('showStats'),
+        ms: document.getElementById('ms'),
+        shuffle: document.getElementById('shuffle'),
+        reset: document.getElementById('reset'),
+        edit: document.getElementById('edit'),
+        next: document.getElementById('next'),
+        word: document.getElementById('word'),
+        screen: document.getElementById('screen'),
+        zone: document.getElementById('zone'),
+        shown: document.getElementById('shown'),
+        acc: document.getElementById('acc'),
+        streak: document.getElementById('streak'),
+        best: document.getElementById('best'),
+        hint: document.getElementById('hint'),
+        // modals
+        statsModal: document.getElementById('statsModal'),
+        closeStats: document.getElementById('closeStats'),
+        modal: document.getElementById('customModal'),
+        modalTextarea: document.getElementById('customTextarea'),
+        modalSave: document.getElementById('saveCustom'),
+        modalCancel: document.getElementById('cancelCustom'),
+        toast: document.getElementById('toast')
+      };
+
+    // ===== Утилиты =====
+    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+
+    // Центральный парсер пользовательского ввода слов — безопасный RegExp
+    function parseWords(raw){
+      if (!raw) return [];
+      return raw
+        .split(/[;,\n]+/)
+        .map(s=>s.trim())
+        .filter(Boolean);
+    }
+
+    // ===== Логика очереди =====
+    let queue = []; let current = null; let hideTimer = null; let state = 'idle';
+    const stats = { shown:0, right:0, streak:0, best:0 };
+
+    function loadQueue(){
+      queue = [...words];
+      if (queue.length>0) shuffle(queue);
+    }
+
+    function showWord(){
+      if (state==='showing') return;
+      if (state==='await-grade'){
+        ui.word.textContent = current;
+        ui.zone.hidden = true;
+      } else {
+        if (state!=='idle' && state!=='graded') return;
+        if (queue.length===0){
+          loadQueue();
+          if (queue.length===0){
+            ui.word.textContent='(добавьте слова)';
+            return;
+          }
+        }
+        current = queue.shift();
+        ui.word.textContent = current;
+        ui.zone.hidden = true; // во время показа оценка отключена
+      }
+      state='showing';
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideWord, Number(ui.ms.value));
+    }
+
+    function hideWord(){
+      if (state!=='showing') return;
+      clearTimeout(hideTimer);
+      ui.word.textContent='—';
+      state='await-grade';
+      ui.zone.hidden=false;
+    }
+
+    function grade(type){
+      if (state!=='await-grade' || !current) return;
+      ui.screen.classList.add(type==='good'?'flash-good':'flash-bad');
+      setTimeout(()=>ui.screen.classList.remove('flash-good','flash-bad'),150);
+      stats.shown++;
+      if (type==='good'){
+        stats.right++; stats.streak++; stats.best=Math.max(stats.best, stats.streak);
+      } else {
+        stats.streak=0; // вернуть слово позже
+        const delay = 3 + Math.floor(Math.random()*3); queue.splice(Math.min(delay, queue.length), 0, current);
+      }
+      updateStats();
+      current=null; state='graded'; ui.zone.hidden=true;
+      showWord();
+    }
+
+    function updateStats(){
+      ui.shown.textContent = stats.shown;
+      ui.acc.textContent = stats.shown? Math.round(100*stats.right/stats.shown)+'%' : '0%';
+      ui.streak.textContent = stats.streak; ui.best.textContent = stats.best;
+    }
+
+    // ===== Modal helpers =====
+    function openModal(){
+      ui.modalTextarea.value = words.join('\n');
+      ui.modal.classList.add('open');
+      ui.modal.setAttribute('aria-hidden','false');
+      setTimeout(()=> ui.modalTextarea.focus(), 0);
+    }
+    function closeModal(){
+      ui.modal.classList.remove('open');
+      ui.modal.setAttribute('aria-hidden','true');
+    }
+    function openStats(){
+      ui.statsModal.classList.add('open');
+      ui.statsModal.setAttribute('aria-hidden','false');
+    }
+    function closeStats(){
+      ui.statsModal.classList.remove('open');
+      ui.statsModal.setAttribute('aria-hidden','true');
+    }
+    function showToast(msg){ ui.toast.textContent = msg; ui.toast.classList.add('show'); setTimeout(()=> ui.toast.classList.remove('show'), 1200); }
+
+    // ===== События =====
+    ui.next.addEventListener('click', showWord);
+    ui.shuffle.addEventListener('click', ()=>shuffle(queue));
+    ui.reset.addEventListener('click', ()=>{ stats.shown=stats.right=stats.streak=stats.best=0; updateStats(); });
+    ui.font.addEventListener('change', ()=>{ document.body.style.fontFamily = ui.font.value; });
+    ui.fontStyle.addEventListener('change', ()=>{ document.body.style.fontStyle = ui.fontStyle.value; });
+    ui.showStats.addEventListener('click', ()=>{ updateStats(); openStats(); });
+    ui.closeStats.addEventListener('click', closeStats);
+    ui.statsModal.addEventListener('click', (e)=>{ if (e.target===ui.statsModal) closeStats(); });
+
+    // Свои слова — теперь открывается встроенное модальное окно (без window.prompt)
+    ui.edit.addEventListener('click', openModal);
+    ui.modalCancel.addEventListener('click', closeModal);
+    ui.modal.addEventListener('click', (e)=>{ if (e.target===ui.modal) closeModal(); });
+    ui.modalSave.addEventListener('click', ()=>{
+      const list = parseWords(ui.modalTextarea.value);
+      words = list;
+      localStorage.setItem(LS_CUSTOM_KEY, JSON.stringify(list));
+      loadQueue();
+      closeModal();
+      showToast(`Сохранено слов: ${list.length}`);
+    });
+
+    // Оценка кликом/тапом по зонам
+    ui.zone.addEventListener('click', (e)=>{ const t=e.target; if (t.dataset.grade==='good') grade('good'); if (t.dataset.grade==='bad') grade('bad'); });
+
+    // Клавиатура: Space удерживать; ← ошибка; → верно; Esc — закрыть модалку; Ctrl+Enter — сохранить
+    window.addEventListener('keydown',(e)=>{
+      if (ui.modal.classList.contains('open') || ui.statsModal.classList.contains('open')){
+        if (e.key==='Escape'){
+          if (ui.modal.classList.contains('open')) closeModal();
+          if (ui.statsModal.classList.contains('open')) closeStats();
+        }
+        if (ui.modal.classList.contains('open') && (e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); ui.modalSave.click(); }
+        return;
+      }
+      if (e.code==='Space'){ e.preventDefault(); showWord(); }
+      if (e.key==='ArrowLeft') grade('bad');
+      if (e.key==='ArrowRight') grade('good');
+    });
+
+    // ===== Инициализация =====
+    function init(){
+      document.body.style.fontFamily = ui.font.value;
+      document.body.style.fontStyle = ui.fontStyle.value;
+      loadQueue();
+      updateStats();
+    }
+    init();
+  </script>
+</body>
+</html>
